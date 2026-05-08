@@ -1,0 +1,40 @@
+organization:
+  name: atlas-landing-zone-platform
+  management_account:
+    name: atlas-management
+    purpose: "Root organization management and billing only"
+
+organizational_units:
+  - name: Security
+    purpose: "Centralized logging, auditing, and security visibility"
+    accounts:
+      - name: atlas-log-archive
+        purpose: "Central storage for CloudTrail, AWS Config, VPC Flow Logs, and audit logs"
+      - name: atlas-audit
+        purpose: "Security audit access across accounts"
+
+  - name: Infrastructure
+    purpose: "Shared platform services used by multiple workload accounts"
+    accounts:
+      - name: atlas-shared-services
+        purpose: "ECR, CI/CD roles, Route 53, GitHub OIDC, shared observability"
+
+  - name: Workloads
+    purpose: "Application environments"
+    accounts:
+      - name: atlas-dev
+        purpose: "Development workloads"
+      - name: atlas-staging
+        purpose: "Pre-production validation"
+      - name: atlas-prod
+        purpose: "Production workloads"
+
+  - name: Sandbox
+    purpose: "Temporary experiments and learning"
+    accounts:
+      - name: atlas-sandbox
+        purpose: "Safe experiments with strict budget limits"
+
+  - name: Suspended
+    purpose: "Disabled, closed, or retired accounts"
+    accounts: []

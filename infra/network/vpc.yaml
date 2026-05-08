@@ -1,0 +1,244 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Atlas reusable multi-environment and multi-region VPC
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: Environment name such as dev, staging, prod, or prod-dr
+
+  VPCCidr:
+    Type: String
+    Description: CIDR block for the VPC
+
+  PublicSubnetACidr:
+    Type: String
+
+  PublicSubnetBCidr:
+    Type: String
+
+  PrivateAppSubnetACidr:
+    Type: String
+
+  PrivateAppSubnetBCidr:
+    Type: String
+
+  PrivateDataSubnetACidr:
+    Type: String
+
+  PrivateDataSubnetBCidr:
+    Type: String
+
+Resources:
+  AtlasVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-vpc
+        - Key: Project
+          Value: atlas
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref AtlasVPC
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AtlasVPC
+      CidrBlock: !Ref PublicSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-public-a
+        - Key: Tier
+          Value: public
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AtlasVPC
+      CidrBlock: !Ref PublicSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-public-b
+        - Key: Tier
+          Value: public
+
+  PrivateAppSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AtlasVPC
+      CidrBlock: !Ref PrivateAppSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-private-app-a
+        - Key: Tier
+          Value: private-app
+
+  PrivateAppSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AtlasVPC
+      CidrBlock: !Ref PrivateAppSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-private-app-b
+        - Key: Tier
+          Value: private-app
+
+  PrivateDataSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AtlasVPC
+      CidrBlock: !Ref PrivateDataSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-private-data-a
+        - Key: Tier
+          Value: private-data
+
+  PrivateDataSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AtlasVPC
+      CidrBlock: !Ref PrivateDataSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-private-data-b
+        - Key: Tier
+          Value: private-data
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AtlasVPC
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  NatGatewayElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-nat
+
+  PrivateAppRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AtlasVPC
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-private-app-rt
+
+  PrivateAppDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateAppRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateAppSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateAppRouteTable
+      SubnetId: !Ref PrivateAppSubnetA
+
+  PrivateAppSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateAppRouteTable
+      SubnetId: !Ref PrivateAppSubnetB
+
+  PrivateDataRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AtlasVPC
+      Tags:
+        - Key: Name
+          Value: !Sub atlas-${EnvironmentName}-private-data-rt
+
+  PrivateDataSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateDataRouteTable
+      SubnetId: !Ref PrivateDataSubnetA
+
+  PrivateDataSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateDataRouteTable
+      SubnetId: !Ref PrivateDataSubnetB
+
+Outputs:
+  VPCId:
+    Value: !Ref AtlasVPC
+    Export:
+      Name: !Sub atlas-${EnvironmentName}-vpc-id
+
+  PublicSubnetA:
+    Value: !Ref PublicSubnetA
+
+  PublicSubnetB:
+    Value: !Ref PublicSubnetB
+
+  PrivateAppSubnetA:
+    Value: !Ref PrivateAppSubnetA
+
+  PrivateAppSubnetB:
+    Value: !Ref PrivateAppSubnetB
+
+  PrivateDataSubnetA:
+    Value: !Ref PrivateDataSubnetA
+
+  PrivateDataSubnetB:
+    Value: !Ref PrivateDataSubnetB
