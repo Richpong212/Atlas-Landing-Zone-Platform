@@ -1,4 +1,3 @@
-cat > infra/main/destroy.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -29,6 +28,15 @@ if [ -n "$CLOUDTRAIL_BUCKET_NAME" ]; then
   aws s3 rm "s3://$CLOUDTRAIL_BUCKET_NAME" --recursive || true
 fi
 
+echo "Deleting Dev EKS stack..."
+aws cloudformation delete-stack \
+  --stack-name "$DEV_EKS_STACK_NAME" \
+  --region "$PRIMARY_REGION" || true
+
+aws cloudformation wait stack-delete-complete \
+  --stack-name "$DEV_EKS_STACK_NAME" \
+  --region "$PRIMARY_REGION" || true
+
 echo "Deleting Dev VPC stack..."
 aws cloudformation delete-stack \
   --stack-name "$DEV_VPC_STACK_NAME" \
@@ -51,4 +59,3 @@ echo "Destroy complete."
 
 echo "Note: AWS Organization and OUs are not deleted by this script."
 echo "We keep them safe because deleting/moving organization structure should be manual."
-EOF

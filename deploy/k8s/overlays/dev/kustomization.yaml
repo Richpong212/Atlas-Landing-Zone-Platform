@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dev
+
+resources:
+  - ../../base
+  - secret.yaml
+
+commonLabels:
+  app.kubernetes.io/name: atlas-api
+  app.kubernetes.io/part-of: atlas-platform
+  app.kubernetes.io/managed-by: kustomize
+  environment: dev
+
+configMapGenerator:
+  - name: atlas-api-config
+    literals:
+      - NODE_ENV=development
+      - APP_ENV=dev
+      - APP_NAME=atlas-api
+      - API_VERSION=v1-dev
+      - PORT=3303
+
+images:
+  - name: atlas-api
+    newName: atlas-api
+    newTag: latest

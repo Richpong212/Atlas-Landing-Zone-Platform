@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Atlas reusable ECR repositories
+
+Parameters:
+  EnvironmentName:
+    Type: String
+
+Resources:
+  AtlasApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub atlas-${EnvironmentName}-api
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      Tags:
+        - Key: Project
+          Value: atlas
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  AtlasApiRepositoryUri:
+    Value: !GetAtt AtlasApiRepository.RepositoryUri
+
+  AtlasApiRepositoryName:
+    Value: !Ref AtlasApiRepository

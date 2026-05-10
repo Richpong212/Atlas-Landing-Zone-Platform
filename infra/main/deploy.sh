@@ -111,4 +111,94 @@ aws cloudformation deploy \
     PrivateDataSubnetBCidr=10.10.22.0/24 \
   --region "$PRIMARY_REGION"
 
+  ###phase 6
+
+  echo "Getting Dev VPC outputs..."
+
+DEV_VPC_ID=$(aws cloudformation describe-stacks \
+  --stack-name "$DEV_VPC_STACK_NAME" \
+  --region "$PRIMARY_REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='VPCId'].OutputValue" \
+  --output text)
+
+DEV_PRIVATE_APP_SUBNET_A=$(aws cloudformation describe-stacks \
+  --stack-name "$DEV_VPC_STACK_NAME" \
+  --region "$PRIMARY_REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='PrivateAppSubnetA'].OutputValue" \
+  --output text)
+
+DEV_PRIVATE_APP_SUBNET_B=$(aws cloudformation describe-stacks \
+  --stack-name "$DEV_VPC_STACK_NAME" \
+  --region "$PRIMARY_REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='PrivateAppSubnetB'].OutputValue" \
+  --output text)
+
+echo "Dev VPC ID: $DEV_VPC_ID"
+echo "Dev private app subnet A: $DEV_PRIVATE_APP_SUBNET_A"
+echo "Dev private app subnet B: $DEV_PRIVATE_APP_SUBNET_B"
+
+echo "Validating EKS template..."
+aws cloudformation validate-template \
+  --template-body file://"$PROJECT_ROOT/infra/eks/eks-cluster.yaml" \
+  --region "$PRIMARY_REGION" >/dev/null
+
+  EKS_STACK_STATUS=$(aws cloudformation describe-stacks \
+  --stack-name "$DEV_EKS_STACK_NAME" \
+  --region "$PRIMARY_REGION" \
+  --query "Stacks[0].StackStatus" \
+  --output text 2>/dev/null || true)
+
+if [ "$EKS_STACK_STATUS" = "ROLLBACK_COMPLETE" ] || [ "$EKS_STACK_STATUS" = "REVIEW_IN_PROGRESS" ]; then
+  echo "Deleting failed EKS stack before redeploy: $EKS_STACK_STATUS"
+
+  aws cloudformation delete-stack \
+    --stack-name "$DEV_EKS_STACK_NAME" \
+    --region "$PRIMARY_REGION"
+
+  aws cloudformation wait stack-delete-complete \
+    --stack-name "$DEV_EKS_STACK_NAME" \
+    --region "$PRIMARY_REGION"
+fi
+
+echo "Deploying Dev EKS cluster..."
+aws cloudformation deploy \
+  --template-file "$PROJECT_ROOT/infra/eks/eks-cluster.yaml" \
+  --stack-name "$DEV_EKS_STACK_NAME" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    ClusterName="$DEV_EKS_CLUSTER_NAME" \
+    VpcId="$DEV_VPC_ID" \
+    PrivateSubnetA="$DEV_PRIVATE_APP_SUBNET_A" \
+    PrivateSubnetB="$DEV_PRIVATE_APP_SUBNET_B" \
+    KubernetesVersion="$KUBERNETES_VERSION" \
+    NodeInstanceType=t3.medium \
+    DesiredNodeCount=2 \
+    MinNodeCount=1 \
+    MaxNodeCount=3 \
+  --region "$PRIMARY_REGION"
+
+
+echo "Validating ECR template..."
+
+aws cloudformation validate-template \
+  --template-body file://"$PROJECT_ROOT/infra/ecr/ecr.yaml" \
+  --region "$PRIMARY_REGION" >/dev/null
+echo "Deploying Dev ECR repositories..."
+
+aws cloudformation deploy \
+  --template-file "$PROJECT_ROOT/infra/ecr/ecr.yaml" \
+  --stack-name "$DEV_ECR_STACK_NAME" \
+  --parameter-overrides \
+    EnvironmentName=dev \
+  --region "$PRIMARY_REGION"
+
+DEV_API_ECR_URI=$(aws cloudformation describe-stacks \
+  --stack-name "$DEV_ECR_STACK_NAME" \
+  --region "$PRIMARY_REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='AtlasApiRepositoryUri'].OutputValue" \
+  --output text)
+
+echo "Dev API ECR URI: $DEV_API_ECR_URI"
+
 echo "Atlas Landing Zone foundation deployed successfully."

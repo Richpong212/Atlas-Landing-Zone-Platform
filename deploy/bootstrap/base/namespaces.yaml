@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    environment: dev
+    project: atlas
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform
+  labels:
+    environment: shared
+    project: atlas
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    environment: shared
+    project: atlas

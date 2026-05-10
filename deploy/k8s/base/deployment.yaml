@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: atlas-api
+  template:
+    metadata:
+      labels:
+        app: atlas-api
+    spec:
+      containers:
+        - name: atlas-api
+          image: atlas-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3303
+          envFrom:
+            - configMapRef:
+                name: atlas-api-config
+            - secretRef:
+                name: atlas-api-secrets
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3303
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3303
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
